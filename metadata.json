@@ -1,5 +1,5 @@
 {
-  "name": "Nano Banana Gen",
-  "description": "Высокоскоростной генератор изображений на базе модели Nano Banana Pro (Gemini 3 Pro Image).",
+  "name": "AI Studio Platform",
+  "description": "Платформа лучших AI инструментов: генерация изображений Nano Banana и удаление водяных знаков Sora.",
   "requestFramePermissions": []
 }

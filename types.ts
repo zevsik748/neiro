@@ -21,3 +21,27 @@ export interface GenerationSettings {
   format: OutputFormat;
   imageInput?: string;
 }
+
+// Sora / Kie.ai Types
+export interface SoraTaskResponse {
+  code: number;
+  msg: string;
+  data: {
+    taskId: string;
+  };
+}
+
+export interface SoraTaskStatusResponse {
+  code: number;
+  msg: string;
+  data: {
+    taskId: string;
+    state: 'waiting' | 'success' | 'fail';
+    resultJson?: string; // JSON string containing resultUrls
+    failMsg?: string;
+  };
+}
+
+export interface SoraResult {
+  resultUrls: string[];
+}

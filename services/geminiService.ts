@@ -1,213 +1,106 @@
+import { GoogleGenAI } from "@google/genai";
 import { GenerationSettings } from "../types";
 
-// API Constants
-const BASE_URL = 'https://api.kie.ai/api/v1/jobs';
-const MODEL_NAME = 'nano-banana-pro';
+// Explicitly using 'gemini-3-pro-image-preview' for Nano Banana Pro.
+const MODEL_NAME = 'gemini-3-pro-image-preview';
 
-// --- Interfaces defined strictly according to the API Documentation ---
-
-interface CreateTaskRequest {
-  model: typeof MODEL_NAME;
-  input: {
-    prompt: string;
-    image_input: string[];
-    aspect_ratio?: string;
-    resolution?: string;
-    output_format?: string;
-  };
-  callBackUrl?: string;
-}
-
-interface CreateTaskResponse {
-  code: number;
-  msg: string;
-  data: {
-    taskId: string;
-  };
-}
-
-interface TaskRecordResponse {
-  code: number;
-  msg: string;
-  data: {
-    taskId: string;
-    model: string;
-    state: 'waiting' | 'success' | 'fail';
-    param: string;
-    resultJson: string | null; // JSON string containing results
-    failCode: string | null;
-    failMsg: string | null;
-    costTime: number | null;
-    completeTime: number | null;
-    createTime: number;
-  };
-}
-
-interface TaskResultContent {
-  resultUrls?: string[];
-  resultObject?: any;
-}
-
-/**
- * Extremely safe API Key retrieval.
- * Tries every possible combination of environment access.
- */
-const getApiKey = (): string | undefined => {
-  let key: string | undefined;
-
-  // 1. Try import.meta.env (Vite standard)
-  try {
-    // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env) {
-      // @ts-ignore
-      const env = import.meta.env;
-      key = env.VITE_API_KEY || env.API_KEY || env.VITE_KIE_API_KEY || env.KIE_API_KEY || env.REACT_APP_API_KEY;
-    }
-  } catch (e) {
-    console.warn("Error accessing import.meta.env", e);
-  }
-
-  if (key) return key;
-
-  // 2. Try process.env (Node/Webpack standard)
-  try {
-    if (typeof process !== 'undefined' && process.env) {
-      key = process.env.VITE_API_KEY || process.env.API_KEY || process.env.KIE_API_KEY || process.env.REACT_APP_API_KEY;
-    }
-  } catch (e) {
-    console.warn("Error accessing process.env", e);
-  }
-
-  return key;
-};
-
-/**
- * Generates an image using the Kie AI Nano Banana Pro API.
- * Follows the strict "Create Task -> Poll Status" flow.
- */
 export const generateImage = async (prompt: string, settings: GenerationSettings): Promise<string> => {
-  const apiKey = getApiKey();
+  // Key must be configured in TimeWeb environment variables
+  const apiKey = process.env.API_KEY;
   
   if (!apiKey) {
-    console.error("API Key is missing. Checked VITE_API_KEY, API_KEY, KIE_API_KEY.");
-    throw new Error("API Key configuration missing. Please ensure 'VITE_API_KEY' is set in your environment variables.");
+    throw new Error("ОШИБКА КОНФИГУРАЦИИ СЕРВЕРА: API_KEY не найден в переменных окружения.");
   }
 
-  console.log("Starting generation with Nano Banana Pro...");
+  const ai = new GoogleGenAI({ apiKey });
 
-  const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${apiKey}`
-  };
+  const parts: any[] = [];
 
-  // --- Step 1: Create Generation Task ---
-  
-  const requestBody: CreateTaskRequest = {
-    model: MODEL_NAME,
-    input: {
-      prompt: prompt,
-      image_input: settings.imageInput ? [settings.imageInput] : [],
-      aspect_ratio: settings.aspectRatio,
-      resolution: settings.resolution,
-      output_format: settings.format
-    }
-  };
-
-  let taskId: string;
-
-  try {
-    console.log("Creating task...", JSON.stringify(requestBody));
-    const createRes = await fetch(`${BASE_URL}/createTask`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(requestBody)
-    });
-
-    if (!createRes.ok) {
-      const errorBody = await createRes.json().catch(() => ({}));
-      console.error("Task creation failed:", createRes.status, errorBody);
-      if (createRes.status === 401) throw new Error("Authentication failed. Check your API Key.");
-      throw new Error(errorBody.msg || `API Error: ${createRes.status}`);
-    }
-
-    const createData: CreateTaskResponse = await createRes.json();
-
-    if (createData.code !== 200) {
-      console.error("API logic error:", createData);
-      throw new Error(createData.msg || 'API returned error during task creation');
-    }
-
-    taskId = createData.data.taskId;
-    console.log(`Task created successfully. Task ID: ${taskId}`);
-
-  } catch (error: any) {
-    console.error("Task Creation Exception:", error);
-    throw new Error(error.message || "Failed to initiate generation task.");
-  }
-
-  // --- Step 2: Poll Task Status ---
-
-  const POLL_INTERVAL_MS = 2500; 
-  const MAX_ATTEMPTS = 40; // ~100 seconds timeout
-
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    // Delay before check
-    await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
-
+  // Handle Image Input (Reference Image)
+  if (settings.imageInput && settings.imageInput.trim().length > 0) {
     try {
-      const recordRes = await fetch(`${BASE_URL}/recordInfo?taskId=${taskId}`, {
-        method: 'GET',
-        headers
+      const response = await fetch(settings.imageInput);
+      if (!response.ok) throw new Error("Не удалось загрузить референсное изображение");
+      
+      const blob = await response.blob();
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (typeof reader.result === 'string') {
+            resolve(reader.result.split(',')[1]);
+          } else {
+            reject(new Error("Не удалось прочитать данные изображения"));
+          }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
       });
 
-      if (!recordRes.ok) {
-        console.warn(`Poll attempt ${attempt + 1} failed with HTTP ${recordRes.status}`);
-        if (recordRes.status === 401) throw new Error("Token expired or invalid during polling.");
-        // If 500 or network error, continue retrying
-        if (recordRes.status >= 500) continue; 
-      }
-
-      const recordData: TaskRecordResponse = await recordRes.json();
-
-      if (recordData.code !== 200) {
-        throw new Error(recordData.msg || "Error querying task status");
-      }
-
-      const { state, resultJson, failMsg } = recordData.data;
-      console.log(`Polling status: ${state} (Attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
-
-      if (state === 'success') {
-        if (!resultJson) {
-          throw new Error("Task succeeded but result data is empty.");
+      parts.push({
+        inlineData: {
+          mimeType: blob.type,
+          data: base64Data
         }
-
-        try {
-          const parsedResult: TaskResultContent = JSON.parse(resultJson);
-          
-          if (parsedResult.resultUrls && parsedResult.resultUrls.length > 0) {
-            console.log("Generation complete:", parsedResult.resultUrls[0]);
-            return parsedResult.resultUrls[0];
-          }
-          
-          throw new Error("No image URL found in result.");
-        } catch (parseError) {
-          console.error("JSON Parse error:", resultJson);
-          throw new Error("Failed to parse result JSON from API.");
-        }
-      } else if (state === 'fail') {
-        console.error("Task failed:", failMsg);
-        throw new Error(failMsg || "Generation task failed on server.");
-      }
-      
-      // If state is 'waiting', loop continues
-
-    } catch (pollError: any) {
-      if (pollError.message.includes("Token expired") || pollError.message.includes("Generation task failed")) {
-        throw pollError;
-      }
-      console.warn(`Polling transient error:`, pollError);
+      });
+    } catch (error) {
+      console.warn("Could not process reference image:", error);
+      throw new Error("Не удалось загрузить референсное изображение. Проверьте ссылку и доступность файла.");
     }
   }
 
-  throw new Error("Generation timed out. The server took too long to respond.");
+  parts.push({ text: prompt });
+
+  // Map UI aspect ratios to Gemini supported aspect ratios
+  let aspectRatio = settings.aspectRatio;
+  const supportedRatios = ["1:1", "3:4", "4:3", "9:16", "16:9"];
+  
+  if (!supportedRatios.includes(aspectRatio)) {
+    switch (aspectRatio) {
+      case '21:9': aspectRatio = '16:9'; break; // Fallback for cinematic
+      case '2:3': aspectRatio = '3:4'; break;
+      case '3:2': aspectRatio = '4:3'; break;
+      case '4:5': aspectRatio = '3:4'; break;
+      case '5:4': aspectRatio = '4:3'; break;
+      default: aspectRatio = '1:1';
+    }
+  }
+
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: {
+        parts: parts
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: aspectRatio as any,
+          imageSize: settings.resolution
+        }
+      }
+    });
+
+    // Iterate through parts to find the image part
+    if (response.candidates?.[0]?.content?.parts) {
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+          const mimeType = part.inlineData.mimeType || 'image/png';
+          return `data:${mimeType};base64,${part.inlineData.data}`;
+        }
+      }
+    }
+    
+    const textPart = response.candidates?.[0]?.content?.parts?.find((p: any) => p.text);
+    if (textPart) {
+      // Sometimes the model refuses and returns text explaining why
+      throw new Error(`Модель отказала в генерации: ${textPart.text}`);
+    }
+
+    throw new Error("Ответ модели не содержит изображения. Попробуйте изменить запрос.");
+  } catch (error: any) {
+    console.error("GenAI Error:", error);
+    if (error.message?.includes("403") || error.message?.includes("API key")) {
+        throw new Error("Ошибка доступа (403). Проверьте API ключ в настройках сервера.");
+    }
+    throw new Error(error.message || "Неизвестная ошибка генерации изображения.");
+  }
 };
