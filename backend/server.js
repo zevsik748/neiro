@@ -29,8 +29,10 @@ app.post('/generate', async (req, res) => {
     }
 });
 
-// Статика для фронта
-app.use(express.static('../frontend'));
+
+// Статика для фронта: отдаём из dist
+const path = require('path');
+app.use(express.static(path.join(__dirname, '../dist')));
 
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => {
