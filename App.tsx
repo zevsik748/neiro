@@ -1,126 +1,69 @@
-import React, { useState, useCallback } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import { generateTaskContent } from './services/geminiService';
-import { Task, TaskStatus } from './types';
-import { TaskItem } from './components/TaskItem';
-import { NewTaskForm } from './components/NewTaskForm';
-import { TaskDetail } from './components/TaskDetail';
-import { IconList, IconPlus } from './components/Icons';
+import React, { useState, useEffect } from 'react';
+import { Header } from './components/Header';
+import { ImageGenerator } from './components/ImageGenerator';
 
-const App: React.FC = () => {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  const [isSidebarOpen, setSidebarOpen] = useState(true);
+function App() {
+  // Persist API Key in local storage for convenience
+  const [apiKey, setApiKey] = useState<string>(() => {
+    return localStorage.getItem('kie_api_key') || '';
+  });
 
-  // Helper to update a specific task in the list
-  const updateTask = (id: string, updates: Partial<Task>) => {
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+  const handleApiKeyChange = (key: string) => {
+    setApiKey(key);
+    localStorage.setItem('kie_api_key', key);
   };
 
-  const handleCreateTask = useCallback(async (prompt: string) => {
-    const newTask: Task = {
-      id: uuidv4(),
-      prompt,
-      status: TaskStatus.QUEUED,
-      createdAt: Date.now(),
-    };
-
-    setTasks(prev => [newTask, ...prev]);
-    setActiveTaskId(newTask.id);
-
-    // Simulate queue delay slightly for effect, then process
-    updateTask(newTask.id, { status: TaskStatus.PROCESSING });
-
-    try {
-      const response = await generateTaskContent(prompt);
-      updateTask(newTask.id, {
-        status: TaskStatus.COMPLETED,
-        response,
-        completedAt: Date.now()
-      });
-    } catch (error) {
-      updateTask(newTask.id, {
-        status: TaskStatus.FAILED,
-        error: error instanceof Error ? error.message : "Unknown error",
-        completedAt: Date.now()
-      });
-    }
-  }, []);
-
-  const activeTask = tasks.find(t => t.id === activeTaskId);
-
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-200 font-sans overflow-hidden">
-      
-      {/* Sidebar - Task History */}
-      <div className={`${isSidebarOpen ? 'w-80 translate-x-0' : 'w-0 -translate-x-full opacity-0'} transition-all duration-300 ease-in-out border-r border-slate-800 bg-slate-950 flex flex-col z-20`}>
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950">
-          <div className="flex items-center gap-2 font-bold text-slate-100">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
-              AI
+    <div className="min-h-screen bg-slate-950 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] text-slate-100 pb-20">
+        
+      <Header />
+
+      <main className="container mx-auto px-4 py-12">
+        <div className="text-center mb-12 space-y-4">
+          <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-white">
+            Раскройте творческий потенциал с <span className="text-banana-400">Nano Banana</span>
+          </h2>
+          <p className="text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
+            Создавайте качественных, последовательных персонажей и сцены с помощью мощной модели KIE.AI Nano Banana. 
+            Быстрая генерация за часть стоимости.
+          </p>
+        </div>
+
+        <ImageGenerator apiKey={apiKey} onApiKeyChange={handleApiKeyChange} />
+
+        {/* Feature Highlights / Info */}
+        <div className="max-w-4xl mx-auto mt-20 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-800 backdrop-blur-sm">
+            <div className="w-10 h-10 bg-blue-500/10 rounded-lg flex items-center justify-center mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-blue-400">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+              </svg>
             </div>
-            <span>Task Manager</span>
+            <h3 className="font-semibold text-white mb-2">Быстрая генерация</h3>
+            <p className="text-sm text-slate-400">Оптимизировано для скорости без потери качества. Результат за секунды.</p>
+          </div>
+          <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-800 backdrop-blur-sm">
+            <div className="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center mb-4">
+               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-purple-400">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+              </svg>
+            </div>
+            <h3 className="font-semibold text-white mb-2">Согласованность</h3>
+            <p className="text-sm text-slate-400">Сохраняйте идентичность персонажей при генерации с режимом Image-to-Image.</p>
+          </div>
+          <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-800 backdrop-blur-sm">
+             <div className="w-10 h-10 bg-green-500/10 rounded-lg flex items-center justify-center mb-4">
+               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-green-400">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h3 className="font-semibold text-white mb-2">Экономичность</h3>
+            <p className="text-sm text-slate-400">Значительно дешевле конкурентов при высочайшем качестве изображений.</p>
           </div>
         </div>
-
-        <div className="p-3">
-          <button
-            onClick={() => setActiveTaskId(null)}
-            className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white py-2 px-4 rounded-lg font-medium transition-colors shadow-lg shadow-indigo-900/20"
-          >
-            <IconPlus className="w-4 h-4" />
-            New Job
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          <div className="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            History
-          </div>
-          {tasks.length === 0 ? (
-            <div className="p-8 text-center text-slate-600 text-sm">
-              No tasks yet.
-            </div>
-          ) : (
-            tasks.map(task => (
-              <TaskItem 
-                key={task.id} 
-                task={task} 
-                isSelected={activeTask?.id === task.id}
-                onClick={(t) => setActiveTaskId(t.id)} 
-              />
-            ))
-          )}
-        </div>
-        
-        {/* Footer info */}
-        <div className="p-4 border-t border-slate-800 text-xs text-slate-600">
-          Status: <span className="text-emerald-500">System Online</span>
-        </div>
-      </div>
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col relative bg-slate-900/30">
-        
-        {/* Mobile Sidebar Toggle (only visible if sidebar logic required on mobile, strictly simpler here) */}
-        <button 
-            className="absolute top-4 left-4 z-10 p-2 bg-slate-800 rounded-md border border-slate-700 text-slate-400 hover:text-white md:hidden"
-            onClick={() => setSidebarOpen(!isSidebarOpen)}
-        >
-            <IconList className="w-5 h-5" />
-        </button>
-
-        {activeTask ? (
-          <TaskDetail task={activeTask} />
-        ) : (
-          <NewTaskForm 
-            onSubmit={handleCreateTask} 
-            isSubmitting={false} 
-          />
-        )}
-      </div>
+      </main>
     </div>
   );
-};
+}
 
 export default App;

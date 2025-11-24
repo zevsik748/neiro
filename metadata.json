@@ -1,5 +1,5 @@
 {
-  "name": "AI Task Manager",
-  "description": "A task-based AI generation dashboard that simulates a job queue system using the Gemini API.",
+  "name": "BananaGen AI",
+  "description": "Создавайте высококачественные, согласованные изображения с помощью API Nano Banana. Поддержка генерации Text-to-Image и Image-to-Image.",
   "requestFramePermissions": []
 }
