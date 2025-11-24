@@ -1,4 +1,3 @@
-import { GoogleGenAI } from "@google/genai";
 import { GenerationSettings } from "../types";
 
 // Helper function to safely get the API Key from various environment variable patterns
@@ -7,20 +6,19 @@ const getApiKey = (): string | undefined => {
 
   // 1. Try Vite standard (import.meta.env)
   try {
-    // @ts-ignore - Check import.meta without crashing if not available
+    // @ts-ignore
     if (typeof import.meta !== 'undefined' && import.meta.env) {
       // @ts-ignore
       const env = import.meta.env;
-      // Check standard VITE_ prefix, generic API_KEY, and your specific custom keys
       key = env.VITE_API_KEY || env.API_KEY || env.VITE_KIE_API_KEY || env.KIE_API_KEY;
     }
   } catch (e) {
-    // Ignore errors if import.meta is not supported
+    // Ignore errors
   }
 
   if (key) return key;
 
-  // 2. Try process.env (Webpack, CRA, or Node.js environments)
+  // 2. Try process.env
   try {
     if (typeof process !== 'undefined' && process.env) {
       key = process.env.API_KEY || 
@@ -30,110 +28,107 @@ const getApiKey = (): string | undefined => {
             process.env.VITE_KIE_API_KEY;
     }
   } catch (e) {
-    // Ignore errors if process is not defined
+    // Ignore errors
   }
 
   return key;
 };
 
-const API_KEY = getApiKey();
-
-if (!API_KEY) {
-  console.warn("API Key not found. Please set VITE_API_KEY in your environment variables.");
-}
+const BASE_URL = 'https://api.kie.ai/api/v1/jobs';
 
 /**
- * Helper function to fetch an image from a URL and convert it to Base64.
- * Required because gemini-3-pro-image-preview expects inlineData for image inputs.
+ * Generates an image using the Kie AI Nano Banana Pro API.
+ * This involves a two-step process:
+ * 1. Create a generation task.
+ * 2. Poll the task status until it succeeds or fails.
  */
-const fetchImageAsBase64 = async (url: string): Promise<{ data: string; mimeType: string }> => {
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch reference image: ${response.statusText}`);
-    }
-    const blob = await response.blob();
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result as string;
-        // Remove the Data URL prefix (e.g., "data:image/jpeg;base64,")
-        const base64Data = base64String.split(',')[1];
-        resolve({ data: base64Data, mimeType: blob.type || 'image/png' });
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  } catch (error: any) {
-    throw new Error(`Reference image processing failed: ${error.message}`);
-  }
-};
-
 export const generateImage = async (prompt: string, settings: GenerationSettings): Promise<string> => {
-  const currentKey = getApiKey();
+  const apiKey = getApiKey();
   
-  if (!currentKey) {
-    throw new Error("API Key is missing. Please set 'VITE_API_KEY' in your Environment Variables and Redeploy.");
+  if (!apiKey) {
+    throw new Error("API Key is missing. Please set 'VITE_API_KEY' in your Environment Variables.");
   }
 
-  const ai = new GoogleGenAI({ apiKey: currentKey });
-
-  // Map application aspect ratios to those supported by gemini-3-pro-image-preview
-  // Supported: "1:1", "3:4", "4:3", "9:16", "16:9"
-  let aspectRatio = settings.aspectRatio;
-  const supportedRatios = ["1:1", "3:4", "4:3", "9:16", "16:9"];
-  
-  const ratioMap: Record<string, string> = {
-    '21:9': '16:9',
-    '4:5': '3:4',
-    '5:4': '4:3',
-    '2:3': '3:4',
-    '3:2': '4:3'
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${apiKey}`
   };
 
-  if (!supportedRatios.includes(aspectRatio)) {
-    aspectRatio = (ratioMap[aspectRatio] || '1:1') as any;
-  }
-
-  const parts: any[] = [];
-
-  // Handle Reference Image if provided
-  if (settings.imageInput && settings.imageInput.trim().length > 0) {
-    const { data, mimeType } = await fetchImageAsBase64(settings.imageInput.trim());
-    parts.push({
-      inlineData: {
-        data: data,
-        mimeType: mimeType,
-      },
+  // 1. Create Task
+  try {
+    const createRes = await fetch(`${BASE_URL}/createTask`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: 'nano-banana-pro',
+        input: {
+          prompt: prompt,
+          // If imageInput is provided, pass it as a single-element array
+          image_input: settings.imageInput ? [settings.imageInput] : [],
+          aspect_ratio: settings.aspectRatio,
+          resolution: settings.resolution,
+          output_format: settings.format
+        }
+      })
     });
-  }
 
-  parts.push({ text: prompt });
-
-  // Using 'gemini-3-pro-image-preview' for High-Quality/4K support (Nano Banana Pro equivalent)
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-image-preview',
-    contents: {
-      parts: parts,
-    },
-    config: {
-      imageConfig: {
-        aspectRatio: aspectRatio as any,
-        imageSize: settings.resolution, // '1K', '2K', '4K' are supported
-      },
-    },
-  });
-
-  // Extract image from the response parts
-  if (response.candidates && response.candidates[0].content && response.candidates[0].content.parts) {
-    for (const part of response.candidates[0].content.parts) {
-      if (part.inlineData) {
-        const base64EncodeString = part.inlineData.data;
-        const mimeType = part.inlineData.mimeType || 'image/png';
-        return `data:${mimeType};base64,${base64EncodeString}`;
-      }
+    if (!createRes.ok) {
+      const errorData = await createRes.json().catch(() => ({}));
+      throw new Error(errorData.msg || `HTTP Error: ${createRes.status}`);
     }
-  }
 
-  throw new Error("No image generated in the response.");
+    const createData = await createRes.json();
+    
+    if (createData.code !== 200) {
+      throw new Error(createData.msg || 'Failed to create generation task');
+    }
+
+    const taskId = createData.data.taskId;
+
+    // 2. Poll for Results
+    // We will poll every 2 seconds for up to 2 minutes (60 attempts)
+    const pollInterval = 2000;
+    const maxAttempts = 60;
+
+    for (let i = 0; i < maxAttempts; i++) {
+      // Wait before polling
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+
+      const recordRes = await fetch(`${BASE_URL}/recordInfo?taskId=${taskId}`, {
+        method: 'GET',
+        headers
+      });
+
+      if (!recordRes.ok) continue; // Skip iteration on network glitch
+
+      const recordData = await recordRes.json();
+      
+      if (recordData.code !== 200) continue;
+
+      const { state, resultJson, failMsg } = recordData.data;
+
+      if (state === 'success') {
+        try {
+          // resultJson is a stringified JSON object containing resultUrls
+          const parsedResult = JSON.parse(resultJson);
+          if (parsedResult.resultUrls && parsedResult.resultUrls.length > 0) {
+            return parsedResult.resultUrls[0];
+          }
+          throw new Error("No image URL found in the response result");
+        } catch (e: any) {
+           throw new Error(`Failed to parse result: ${e.message}`);
+        }
+      } else if (state === 'fail') {
+        throw new Error(failMsg || 'Generation task failed');
+      }
+      
+      // If state is 'waiting', loop continues
+    }
+
+    throw new Error("Generation timed out. Please try again.");
+
+  } catch (error: any) {
+    console.error("Generation Error:", error);
+    throw new Error(error.message || "An unexpected error occurred during generation.");
+  }
 };
