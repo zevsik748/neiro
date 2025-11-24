@@ -49,38 +49,36 @@ interface TaskResultContent {
 }
 
 /**
- * Safely retrieves the API Key from environment variables.
- * Checks both Vite (import.meta.env) and standard (process.env) patterns.
+ * Extremely safe API Key retrieval.
+ * Tries every possible combination of environment access.
  */
 const getApiKey = (): string | undefined => {
-  // 1. Try Vite standard (import.meta.env)
+  let key: string | undefined;
+
+  // 1. Try import.meta.env (Vite standard)
   try {
-    // @ts-ignore - Accessing import.meta safely
+    // @ts-ignore
     if (typeof import.meta !== 'undefined' && import.meta.env) {
       // @ts-ignore
       const env = import.meta.env;
-      const key = env.VITE_API_KEY || env.API_KEY || env.VITE_KIE_API_KEY || env.KIE_API_KEY;
-      if (key) return key;
+      key = env.VITE_API_KEY || env.API_KEY || env.VITE_KIE_API_KEY || env.KIE_API_KEY || env.REACT_APP_API_KEY;
     }
-  } catch {
-    // Continue if import.meta access fails
+  } catch (e) {
+    console.warn("Error accessing import.meta.env", e);
   }
 
-  // 2. Try standard process.env
+  if (key) return key;
+
+  // 2. Try process.env (Node/Webpack standard)
   try {
     if (typeof process !== 'undefined' && process.env) {
-      const key = process.env.API_KEY || 
-                  process.env.VITE_API_KEY || 
-                  process.env.REACT_APP_API_KEY || 
-                  process.env.KIE_API_KEY || 
-                  process.env.VITE_KIE_API_KEY;
-      if (key) return key;
+      key = process.env.VITE_API_KEY || process.env.API_KEY || process.env.KIE_API_KEY || process.env.REACT_APP_API_KEY;
     }
-  } catch {
-    // Continue if process access fails
+  } catch (e) {
+    console.warn("Error accessing process.env", e);
   }
 
-  return undefined;
+  return key;
 };
 
 /**
@@ -91,8 +89,11 @@ export const generateImage = async (prompt: string, settings: GenerationSettings
   const apiKey = getApiKey();
   
   if (!apiKey) {
-    throw new Error("API Key not found. Please set 'VITE_API_KEY' in your environment variables.");
+    console.error("API Key is missing. Checked VITE_API_KEY, API_KEY, KIE_API_KEY.");
+    throw new Error("API Key configuration missing. Please ensure 'VITE_API_KEY' is set in your environment variables.");
   }
+
+  console.log("Starting generation with Nano Banana Pro...");
 
   const headers = {
     'Content-Type': 'application/json',
@@ -105,7 +106,6 @@ export const generateImage = async (prompt: string, settings: GenerationSettings
     model: MODEL_NAME,
     input: {
       prompt: prompt,
-      // API expects an array for image_input.
       image_input: settings.imageInput ? [settings.imageInput] : [],
       aspect_ratio: settings.aspectRatio,
       resolution: settings.resolution,
@@ -116,6 +116,7 @@ export const generateImage = async (prompt: string, settings: GenerationSettings
   let taskId: string;
 
   try {
+    console.log("Creating task...", JSON.stringify(requestBody));
     const createRes = await fetch(`${BASE_URL}/createTask`, {
       method: 'POST',
       headers,
@@ -124,26 +125,30 @@ export const generateImage = async (prompt: string, settings: GenerationSettings
 
     if (!createRes.ok) {
       const errorBody = await createRes.json().catch(() => ({}));
-      throw new Error(errorBody.msg || `Failed to create task: HTTP ${createRes.status}`);
+      console.error("Task creation failed:", createRes.status, errorBody);
+      if (createRes.status === 401) throw new Error("Authentication failed. Check your API Key.");
+      throw new Error(errorBody.msg || `API Error: ${createRes.status}`);
     }
 
     const createData: CreateTaskResponse = await createRes.json();
 
     if (createData.code !== 200) {
+      console.error("API logic error:", createData);
       throw new Error(createData.msg || 'API returned error during task creation');
     }
 
     taskId = createData.data.taskId;
+    console.log(`Task created successfully. Task ID: ${taskId}`);
 
   } catch (error: any) {
-    console.error("Task Creation Failed:", error);
+    console.error("Task Creation Exception:", error);
     throw new Error(error.message || "Failed to initiate generation task.");
   }
 
   // --- Step 2: Poll Task Status ---
 
-  const POLL_INTERVAL_MS = 2000; // 2 seconds
-  const MAX_ATTEMPTS = 60; // 2 minutes timeout
+  const POLL_INTERVAL_MS = 2500; 
+  const MAX_ATTEMPTS = 40; // ~100 seconds timeout
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     // Delay before check
@@ -156,52 +161,53 @@ export const generateImage = async (prompt: string, settings: GenerationSettings
       });
 
       if (!recordRes.ok) {
-        // If network error on poll (not auth), just wait and try again
-        if (recordRes.status === 401) throw new Error("Authentication failed during polling.");
+        console.warn(`Poll attempt ${attempt + 1} failed with HTTP ${recordRes.status}`);
+        if (recordRes.status === 401) throw new Error("Token expired or invalid during polling.");
+        // If 500 or network error, continue retrying
         if (recordRes.status >= 500) continue; 
-        throw new Error(`Polling failed: HTTP ${recordRes.status}`);
       }
 
       const recordData: TaskRecordResponse = await recordRes.json();
 
       if (recordData.code !== 200) {
-        // API logic error
         throw new Error(recordData.msg || "Error querying task status");
       }
 
       const { state, resultJson, failMsg } = recordData.data;
+      console.log(`Polling status: ${state} (Attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
 
       if (state === 'success') {
         if (!resultJson) {
-          throw new Error("Task succeeded but no result data returned.");
+          throw new Error("Task succeeded but result data is empty.");
         }
 
         try {
           const parsedResult: TaskResultContent = JSON.parse(resultJson);
           
           if (parsedResult.resultUrls && parsedResult.resultUrls.length > 0) {
+            console.log("Generation complete:", parsedResult.resultUrls[0]);
             return parsedResult.resultUrls[0];
           }
           
           throw new Error("No image URL found in result.");
         } catch (parseError) {
+          console.error("JSON Parse error:", resultJson);
           throw new Error("Failed to parse result JSON from API.");
         }
       } else if (state === 'fail') {
-        throw new Error(failMsg || "Generation task failed.");
+        console.error("Task failed:", failMsg);
+        throw new Error(failMsg || "Generation task failed on server.");
       }
       
-      // If state is 'waiting', loop continues to next attempt
+      // If state is 'waiting', loop continues
 
     } catch (pollError: any) {
-      // If it's a critical error, stop.
-      if (pollError.message.includes("Authentication") || pollError.message.includes("Generation task failed")) {
+      if (pollError.message.includes("Token expired") || pollError.message.includes("Generation task failed")) {
         throw pollError;
       }
-      // Otherwise log and retry (e.g. transient network issue)
-      console.warn(`Polling attempt ${attempt + 1} warning:`, pollError);
+      console.warn(`Polling transient error:`, pollError);
     }
   }
 
-  throw new Error("Generation timed out. Please try again later.");
+  throw new Error("Generation timed out. The server took too long to respond.");
 };
