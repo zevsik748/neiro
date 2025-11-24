@@ -1,11 +1,45 @@
 import { GoogleGenAI } from "@google/genai";
 import { GenerationSettings } from "../types";
 
-// The API key must be obtained exclusively from process.env.API_KEY
-const API_KEY = process.env.API_KEY;
+// Helper function to safely get the API Key from various environment variable patterns
+const getApiKey = (): string | undefined => {
+  let key: string | undefined;
+
+  // 1. Try Vite standard (import.meta.env)
+  try {
+    // @ts-ignore - Check import.meta without crashing if not available
+    if (typeof import.meta !== 'undefined' && import.meta.env) {
+      // @ts-ignore
+      const env = import.meta.env;
+      // Check standard VITE_ prefix, generic API_KEY, and your specific custom keys
+      key = env.VITE_API_KEY || env.API_KEY || env.VITE_KIE_API_KEY || env.KIE_API_KEY;
+    }
+  } catch (e) {
+    // Ignore errors if import.meta is not supported
+  }
+
+  if (key) return key;
+
+  // 2. Try process.env (Webpack, CRA, or Node.js environments)
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      key = process.env.API_KEY || 
+            process.env.VITE_API_KEY || 
+            process.env.REACT_APP_API_KEY || 
+            process.env.KIE_API_KEY || 
+            process.env.VITE_KIE_API_KEY;
+    }
+  } catch (e) {
+    // Ignore errors if process is not defined
+  }
+
+  return key;
+};
+
+const API_KEY = getApiKey();
 
 if (!API_KEY) {
-  console.error("API Key is missing. Please ensure process.env.API_KEY is available.");
+  console.warn("API Key not found. Please set VITE_API_KEY in your environment variables.");
 }
 
 /**
@@ -36,11 +70,13 @@ const fetchImageAsBase64 = async (url: string): Promise<{ data: string; mimeType
 };
 
 export const generateImage = async (prompt: string, settings: GenerationSettings): Promise<string> => {
-  if (!API_KEY) {
-    throw new Error("API Key configuration error: process.env.API_KEY is missing.");
+  const currentKey = getApiKey();
+  
+  if (!currentKey) {
+    throw new Error("API Key is missing. Please set 'VITE_API_KEY' in your Environment Variables and Redeploy.");
   }
 
-  const ai = new GoogleGenAI({ apiKey: API_KEY });
+  const ai = new GoogleGenAI({ apiKey: currentKey });
 
   // Map application aspect ratios to those supported by gemini-3-pro-image-preview
   // Supported: "1:1", "3:4", "4:3", "9:16", "16:9"
