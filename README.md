@@ -1,43 +1,20 @@
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 
-# neiro
+# Run and deploy your AI Studio app
 
-Генерация фото "нано банана" через API kie.ai
+This contains everything you need to run your app locally.
 
-## Backend (Node.js)
+View your app in AI Studio: https://ai.studio/apps/drive/17WFqgPgF9YUsIVPMSJbDLwPzjo0aOfc9
 
-1. Перейдите в папку backend:
-	```
-	cd backend
-	```
-2. Установите зависимости:
-	```
-	npm install
-	```
-3. Добавьте переменную окружения с вашим API-ключом:
-	- В панели Timeweb Cloud добавьте переменную `KIE_API_KEY`.
-	- Локально создайте файл `.env`:
-	  ```
-	  KIE_API_KEY=ВАШ_КЛЮЧ
-	  ```
-4. Запустите сервер:
-	```
-	npm start
-	```
+## Run Locally
 
-## Frontend
+**Prerequisites:**  Node.js
 
-Файлы frontend автоматически раздаются сервером Node.js.
-Откройте сайт по адресу, который выдаст Timeweb Cloud.
 
-## Деплой на Timeweb Cloud
-
-1. Выберите окружение Node.js 24 (Другой).
-2. Укажите команду установки зависимостей:
-	```
-	npm install
-	```
-3. Укажите команду запуска:
-	```
-	npm start
-	```
-4. Добавьте переменную окружения `KIE_API_KEY` с вашим ключом.
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`
