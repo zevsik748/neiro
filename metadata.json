@@ -1,5 +1,5 @@
 {
-  "name": "AI Studio Platform",
-  "description": "Платформа лучших AI инструментов: генерация изображений Nano Banana и удаление водяных знаков Sora.",
+  "name": "AI Task Manager",
+  "description": "A task-based AI generation dashboard that simulates a job queue system using the Gemini API.",
   "requestFramePermissions": []
 }
