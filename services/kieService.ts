@@ -3,10 +3,11 @@ import { SoraTaskResponse, SoraTaskStatusResponse, SoraResult } from '../types';
 const KIE_API_URL = 'https://api.kie.ai/api/v1/jobs';
 
 export const createSoraTask = async (videoUrl: string): Promise<string> => {
-  const apiKey = process.env.KIE_API_KEY;
+  // Используем стандартный process.env.API_KEY, так как VITE_ префиксы могут не работать без сборщика
+  const apiKey = process.env.API_KEY;
   
   if (!apiKey) {
-    throw new Error("ОШИБКА КОНФИГУРАЦИИ: KIE_API_KEY не найден. Проверьте настройки TimeWeb.");
+    throw new Error("ОШИБКА КОНФИГУРАЦИИ: API_KEY не найден. Проверьте настройки переменных окружения.");
   }
 
   try {
@@ -39,8 +40,8 @@ export const createSoraTask = async (videoUrl: string): Promise<string> => {
 };
 
 export const getSoraTaskResult = async (taskId: string): Promise<SoraResult | null> => {
-  const apiKey = process.env.KIE_API_KEY;
-  if (!apiKey) throw new Error("KIE_API_KEY не найден");
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) throw new Error("API_KEY не найден");
 
   try {
     const response = await fetch(`${KIE_API_URL}/recordInfo?taskId=${taskId}`, {

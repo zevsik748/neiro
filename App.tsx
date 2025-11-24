@@ -72,6 +72,11 @@ const PremiumSelect = ({
 const App: React.FC = () => {
   const [activeToolId, setActiveToolId] = useState('nano-banana');
   
+  // Update document title
+  useEffect(() => {
+    document.title = APP_TITLE;
+  }, []);
+  
   // --- GEMINI STATES ---
   const [prompt, setPrompt] = useState('');
   const [settings, setSettings] = useState<GenerationSettings>({
@@ -225,7 +230,7 @@ const App: React.FC = () => {
 
         {/* --- NANO BANANA (GEMINI) UI --- */}
         {activeToolId === 'nano-banana' && (
-          <div className="flex flex-col lg:flex-row gap-12 items-start animate-fade-in">
+          <div key="nano-banana" className="flex flex-col lg:flex-row gap-12 items-start animate-fade-in">
              
              {/* Left Panel: Controls */}
              <div className="w-full lg:w-[380px] shrink-0 space-y-8 lg:sticky lg:top-8">
@@ -359,7 +364,7 @@ const App: React.FC = () => {
 
         {/* --- SORA REMOVER UI --- */}
         {activeToolId === 'sora-remover' && (
-          <div className="max-w-3xl mx-auto animate-fade-in">
+          <div key="sora-remover" className="max-w-3xl mx-auto animate-fade-in">
              <div className="bg-surface border border-white/5 rounded-2xl p-6 md:p-10 shadow-xl">
                 
                 <div className="text-center mb-8">
