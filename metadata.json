@@ -1,5 +1,5 @@
 {
-  "name": "BananaGen AI",
-  "description": "Создавайте высококачественные, согласованные изображения с помощью API Nano Banana. Поддержка генерации Text-to-Image и Image-to-Image.",
+  "name": "Timeweb Deployment Check",
+  "description": "A diagnostic application to verify deployment settings on Timeweb Cloud, including build output and environment variable configuration.",
   "requestFramePermissions": []
 }

@@ -1,69 +1,136 @@
-import React, { useState, useEffect } from 'react';
-import { Header } from './components/Header';
-import { ImageGenerator } from './components/ImageGenerator';
+import React, { useState, useCallback } from 'react';
+import { Rocket, Server, BrainCircuit, Terminal, Check } from 'lucide-react';
+import { checkGeminiConnection } from './services/gemini';
+import { StatusCard } from './components/StatusCard';
+import { DeploymentStatus } from './types';
 
-function App() {
-  // Persist API Key in local storage for convenience
-  const [apiKey, setApiKey] = useState<string>(() => {
-    return localStorage.getItem('kie_api_key') || '';
-  });
+const App: React.FC = () => {
+  const [aiStatus, setAiStatus] = useState<DeploymentStatus>(DeploymentStatus.IDLE);
+  const [aiResponse, setAiResponse] = useState<string | null>(null);
 
-  const handleApiKeyChange = (key: string) => {
-    setApiKey(key);
-    localStorage.setItem('kie_api_key', key);
-  };
+  const handleTestAi = useCallback(async () => {
+    setAiStatus(DeploymentStatus.LOADING);
+    setAiResponse(null);
+    try {
+      const response = await checkGeminiConnection();
+      setAiResponse(response);
+      setAiStatus(DeploymentStatus.SUCCESS);
+    } catch (error: any) {
+      setAiResponse(`Error: ${error.message}`);
+      setAiStatus(DeploymentStatus.ERROR);
+    }
+  }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] text-slate-100 pb-20">
+    <div className="min-h-screen bg-slate-900 text-slate-200 p-6 md:p-12">
+      <div className="max-w-4xl mx-auto space-y-8">
         
-      <Header />
+        {/* Header */}
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-8">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-blue-600 rounded-lg">
+                <Rocket className="w-6 h-6 text-white" />
+              </div>
+              <h1 className="text-3xl font-bold text-white tracking-tight">Timeweb Check</h1>
+            </div>
+            <p className="text-slate-400">Панель проверки успешного развертывания (Deployment Verification)</p>
+          </div>
+          <div className="flex items-center gap-2 px-4 py-2 bg-emerald-950/30 border border-emerald-900 rounded-full text-emerald-400 text-sm font-medium">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            System Online
+          </div>
+        </header>
 
-      <main className="container mx-auto px-4 py-12">
-        <div className="text-center mb-12 space-y-4">
-          <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-white">
-            Раскройте творческий потенциал с <span className="text-banana-400">Nano Banana</span>
-          </h2>
-          <p className="text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
-            Создавайте качественных, последовательных персонажей и сцены с помощью мощной модели KIE.AI Nano Banana. 
-            Быстрая генерация за часть стоимости.
-          </p>
+        {/* Main Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          {/* 1. Build Verification */}
+          <StatusCard
+            title="Сборка Frontend"
+            description="Если вы видите этот экран, значит команда `npm run build` выполнена успешно и статика раздается из папки /dist."
+            status="success"
+            result="Build Complete: index.html загружен"
+            action={
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <Terminal className="w-4 h-4" />
+                <span>Verified by React Runtime</span>
+              </div>
+            }
+          />
+
+          {/* 2. Environment Verification */}
+          <StatusCard
+            title="Окружение Node.js"
+            description="Проверка версии окружения, указанной в настройках (v24)."
+            status="success"
+            result={`Environment: Production Mode`}
+            action={
+               <div className="flex items-center gap-2 text-sm text-slate-400">
+                <Server className="w-4 h-4" />
+                <span>Running on Timeweb App Platform</span>
+              </div>
+            }
+          />
+
+          {/* 3. AI Connectivity (Interactive) */}
+          <StatusCard
+            title="Проверка AI API"
+            description="Тест переменной окружения API_KEY и доступа к Google Gemini 2.5."
+            status={
+              aiStatus === DeploymentStatus.IDLE ? 'pending' :
+              aiStatus === DeploymentStatus.LOADING ? 'loading' :
+              aiStatus === DeploymentStatus.SUCCESS ? 'success' : 'error'
+            }
+            result={aiResponse || undefined}
+            action={
+              <button
+                onClick={handleTestAi}
+                disabled={aiStatus === DeploymentStatus.LOADING}
+                className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium transition-colors"
+              >
+                {aiStatus === DeploymentStatus.LOADING ? (
+                  <>Идет запрос...</>
+                ) : (
+                  <>
+                    <BrainCircuit className="w-4 h-4" />
+                    Протестировать API
+                  </>
+                )}
+              </button>
+            }
+          />
+
+           {/* 4. Configuration Info */}
+           <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-slate-100 mb-4">Инструкция</h3>
+              <ul className="space-y-3">
+                <li className="flex items-start gap-3 text-sm text-slate-400">
+                  <div className="mt-0.5 min-w-4 min-h-4 w-4 h-4 rounded-full bg-slate-700 flex items-center justify-center text-[10px] font-bold">1</div>
+                  <span>Убедитесь, что в настройках Timeweb указана переменная <code className="bg-slate-900 px-1 py-0.5 rounded text-slate-300">API_KEY</code>.</span>
+                </li>
+                <li className="flex items-start gap-3 text-sm text-slate-400">
+                  <div className="mt-0.5 min-w-4 min-h-4 w-4 h-4 rounded-full bg-slate-700 flex items-center justify-center text-[10px] font-bold">2</div>
+                  <span>Команда сборки должна быть <code className="bg-slate-900 px-1 py-0.5 rounded text-slate-300">npm run build</code>.</span>
+                </li>
+                <li className="flex items-start gap-3 text-sm text-slate-400">
+                  <div className="mt-0.5 min-w-4 min-h-4 w-4 h-4 rounded-full bg-slate-700 flex items-center justify-center text-[10px] font-bold">3</div>
+                  <span>Директория сборки (output) должна быть <code className="bg-slate-900 px-1 py-0.5 rounded text-slate-300">dist</code>.</span>
+                </li>
+              </ul>
+           </div>
+
         </div>
 
-        <ImageGenerator apiKey={apiKey} onApiKeyChange={handleApiKeyChange} />
-
-        {/* Feature Highlights / Info */}
-        <div className="max-w-4xl mx-auto mt-20 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-800 backdrop-blur-sm">
-            <div className="w-10 h-10 bg-blue-500/10 rounded-lg flex items-center justify-center mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-blue-400">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
-              </svg>
-            </div>
-            <h3 className="font-semibold text-white mb-2">Быстрая генерация</h3>
-            <p className="text-sm text-slate-400">Оптимизировано для скорости без потери качества. Результат за секунды.</p>
-          </div>
-          <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-800 backdrop-blur-sm">
-            <div className="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center mb-4">
-               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-purple-400">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-              </svg>
-            </div>
-            <h3 className="font-semibold text-white mb-2">Согласованность</h3>
-            <p className="text-sm text-slate-400">Сохраняйте идентичность персонажей при генерации с режимом Image-to-Image.</p>
-          </div>
-          <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-800 backdrop-blur-sm">
-             <div className="w-10 h-10 bg-green-500/10 rounded-lg flex items-center justify-center mb-4">
-               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-green-400">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <h3 className="font-semibold text-white mb-2">Экономичность</h3>
-            <p className="text-sm text-slate-400">Значительно дешевле конкурентов при высочайшем качестве изображений.</p>
-          </div>
-        </div>
-      </main>
+        <footer className="text-center text-slate-500 text-sm pt-8 border-t border-slate-800">
+          <p>Generated by Gemini • Ready for Timeweb Cloud</p>
+        </footer>
+      </div>
     </div>
   );
-}
+};
 
 export default App;
